@@ -133,9 +133,3 @@ pip install -e .
 ```
 
 ---
-
-## 📌 Contribution Guidelines
-
-- Code style & linting rules  
-- Tests required for pull requests  
-- Template issues for contributions  
