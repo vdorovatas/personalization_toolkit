@@ -80,29 +80,6 @@ pip install -e .
 ---
 
 ## 🚀 TODOs
-
-### 📌 Data Release
-
-- [ ] Curate and Publish Datasets  
-  - [ ] Single-concept benchmark  
-  - [ ] Multi-concept benchmark  
-  - [ ] Video-based VQA benchmark  
-  - [ ] Documentation describing dataset format  
-
-- [ ] Preprocessing Scripts  
-  - [ ] Reference image extraction & patch feature preparation  
-  - [ ] Image resizing, normalization utilities  
-
-- [ ] Licensing & Usage  
-  - [ ] Choose dataset license (e.g., CC BY)  
-  - [ ] Add README with citation instructions  
-
-- [ ] Benchmark Evaluation  
-  - [ ] Leaderboard metrics  
-  - [ ] Baseline results from PeKit  
-
----
-
 ### 🧑‍💻 Code Release
 
 #### 🔹 Core Pipeline
@@ -113,7 +90,6 @@ pip install -e .
   - [ ] Save embedding vectors in memory  
 
 - [ ] Retrieval System  
-  - [ ] Nearest neighbor retrieval backend  
   - [ ] Thresholding logic & object matching  
   - [ ] Multiple concept detection  
 
@@ -121,11 +97,6 @@ pip install -e .
   - [ ] LVLM input formatting  
   - [ ] Prompt templates for VQA & captioning  
   - [ ] Overlay generation for visual cues  
-
-- [ ] Model Wrappers  
-  - [ ] Plug-in support for LLaVA, MiniGPT, Qwen-VL, etc.  
-  - [ ] Config files for different backbones  
-
 ---
 
 ### 🧪 Evaluation & Benchmarks
@@ -136,8 +107,10 @@ pip install -e .
   - [ ] Ablation tests  
 
 - [ ] Metrics  
-  - [ ] Accuracy, BLEU, EM  
-  - [ ] Precision/recall for personalized retrieval  
+  - [ ] Accuracy/Precision/recall for personalized retrieval  
+  - [ ] Accuracy for Multiple-choice VQA
+  - [ ] Accuracy for Open-ended VQA
+  - [ ] Captioning Recall
 
 ---
 
