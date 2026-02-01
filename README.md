@@ -117,7 +117,6 @@ pip install -e .
 ### 📦 Packaging & Deployment
 
 - [ ] `setup.py` / `pyproject.toml` for pip installs  
-- [ ] Dockerfile for reproducibility  
 - [ ] Example notebooks demonstrating end-to-end usage  
 
 ---
