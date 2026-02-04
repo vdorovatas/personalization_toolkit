@@ -7,6 +7,8 @@
 - 🧠 Method Summary  
 - 📂 Dataset: This-is-My-Img  
 - ⚙️ Installation  
+- 🚀 Evaluation
+
 - 🚀 TODOs  
 - 📚 Citation  
 - 📌 Contribution Guidelines  
@@ -79,6 +81,19 @@ pip install -e .
 
 ---
 
+## 🚀 Evaluation
+### Dataset Folder Structure
+Download the datasets and put them in the same folder with the following structure:
+- myvlm
+  - data
+    - [concepts]
+- YoLLaVA
+  - test
+    - [concepts]
+  - train
+    - [concepts]
+- This-is-My-Img
+
 ## 🚀 TODOs
 ### 🧑‍💻 Code Release
 
@@ -111,13 +126,6 @@ pip install -e .
   - [ ] Accuracy for Multiple-choice VQA
   - [ ] Accuracy for Open-ended VQA
   - [ ] Captioning Recall
-
----
-
-### 📦 Packaging & Deployment
-
-- [ ] `setup.py` / `pyproject.toml` for pip installs  
-- [ ] Example notebooks demonstrating end-to-end usage  
 
 ---
 
