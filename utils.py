@@ -192,8 +192,8 @@ def get_objects_features(args, my_objects): #HERE
     
 
     #######temporary Vaggelis extractions
-    if args.dataset=='myvlm':
-        features_path = "/fsx/ad/vlm/myvlm/vdoro_extracted_features/grounding_sam/1.2-augmented/"
+    #if args.dataset=='myvlm':
+    #    features_path = "/fsx/ad/vlm/myvlm/vdoro_extracted_features/grounding_sam/1.2-augmented/"
     #if args.dataset=='yollava':
     #    features_path = "/fsx/ad/vlm/yollava/vdoro_extracted_features/grounding_sam_face/labelled-1.2-augmented/"
     #if args.dataset=='this-is-my':
@@ -206,8 +206,11 @@ def get_objects_features(args, my_objects): #HERE
             obj = obj.replace(' ','_')
         elif args.dataset=='yollava':
             obj = substring_before_last_dash(obj)
+        #import pdb;pdb.set_trace()
         obj_files=glob.glob(features_path+"/{}/*.pt".format(obj),recursive=True)
         random.shuffle(obj_files)
+        if args.n_training_views is not None:
+            obj_files = obj_files[:args.n_training_views]
         all_obj_files.append(obj_files)
     #import pdb;pdb.set_trace()
     for o_num,o in enumerate(all_obj_files):

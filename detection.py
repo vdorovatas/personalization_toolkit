@@ -67,9 +67,6 @@ def setup_args():
     parser.add_argument('--data_folder', type=str, 
                         default='/fsx/ad/vlm/github_datasets_test/', 
                         help='Main dataset storage directory')
-    parser.add_argument('--save_folder', type=str, 
-                        default='./results_folder/', 
-                        help='Results storage directory')
     
     # Device configuration
     parser.add_argument('--device', type=str, default='cuda:0',
@@ -578,7 +575,6 @@ def print_config(args) -> None:
     print(f"Batch size:        {args.batch_size}")
     print(f"Grounding SAM:     {args.grounding_sam}")
     print(f"Variation:         {args.variation}")
-    print(f"Min mask area:     {args.min_mask_area}")
     print(f"N training views:  {args.n_training_views}")
     print("="*70 + "\n")
 

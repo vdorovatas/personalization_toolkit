@@ -173,8 +173,40 @@ python extraction.py \
   --multi_concept \
   --features_folder ./features/
 ```
+## Task 1: Object Detection Evaluation
 
+Evaluate personalized object detection on your dataset:
 
+```bash
+python detection.py \
+  --dataset yollava \
+  --split test \
+  --task detection \
+  --n_training_views 1 \
+  --data_folder ./datasets/ \
+  --features_folder ./features/ \
+  --grounding_sam
+```
+
+### Key Arguments
+
+| Argument | Options/Type | Description |
+|----------|--------------|-------------|
+| `--dataset` | `myvlm`, `yollava`, `this-is-my` | Dataset to evaluate |
+| `--split` | `train`, `test`, `validation` | Data split to process |
+| `--task` | `detection` | Task type |
+| `--n_training_views` | integer | Number of reference feature files to load per concept |
+| `--data_folder` | path | Root directory containing dataset images |
+| `--features_folder` | path | Directory containing pre-extracted features |
+| `--grounding_sam` | flag | Load features from `gsam/` subdirectory (for features extracted with Grounding-SAM) |
+| `--multi_concept` | flag | Enable multi-concept evaluation mode. Only for `this-is-my` dataset |
+| `--test_split` | `Positive`, `Fake`, `Negative (Hard)`, `Negative (Other)` | For `this-is-my` dataset only - which split to evaluate |
+| `--variation` | string | Feature variation type (default: `normal`) |
+| `--detect_thresh` | float | Detection threshold (default: 0.75) |
+
+### Output
+
+Results are saved to `results/` directory as `.npy` files containing precision and recall metrics.
 
 ## 🚀 TODOs
 ### 🧑‍💻 Code Release

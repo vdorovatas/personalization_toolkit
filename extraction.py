@@ -172,7 +172,6 @@ def print_config(args) -> None:
     print(f"Grounding SAM:     {args.grounding_sam}")
     print(f"Variation:         {args.variation}")
     print(f"Augmentations:     {args.n_augment}")
-    print(f"Min mask area:     {args.min_mask_area}")
     print("="*70 + "\n")
 
 # Main pipeline
