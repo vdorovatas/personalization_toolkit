@@ -113,7 +113,67 @@ This-is-My-Img/
     └── VQA/
         └── [VQA files for each multi-concept pair]
 ```
-    
+## Reference View Extraction
+
+Extract reference view features from your dataset using the following command:
+```bash
+python extraction.py \
+  --data_folder ./datasets/ \
+  --dataset myvlm \
+  --split train \
+  --device_ids 0,1,2,3 \
+  --n_training_views 5 \
+  --variation augment \
+  --n_augment 9 \
+  --grounding_sam \
+  --features_folder ./features/
+```
+
+### Arguments
+
+| Argument | Type | Choices | Description |
+|----------|------|---------|-------------|
+| `--data_folder` | `str` | - | Path to your dataset directory |
+| `--dataset` | `str` | `myvlm`, `yollava`, `this-is-my` | Dataset to process |
+| `--split` | `str` | `train`, `test` | Data split (must be `train` for reference view extraction) |
+| `--variation` | `str` | `normal`, `augment` | Feature extraction mode |
+| `--n_augment` | `int` | - | Number of augmented views (only for `variation=augment`) |
+| `--grounding_sam` | `flag` | - | Use Grounding SAM for mask extraction (omit to use Grounding DINO) |
+| `--multi_concept` | `flag` | - | Process extended concepts (only for `this-is-my` dataset) |
+| `--n_training_views` | `int` | - | Number of reference views to extract per concept |
+| `--features_folder` | `str` | - | Directory to save extracted feature files |
+| `--device_ids` | `str` | - | Comma-separated GPU device IDs (e.g., `0,1,2,3`) |
+
+### Variation Modes
+
+- **`normal`**: Extracts features only from the original reference views
+- **`augment`**: Extracts features from both original and augmented reference views
+
+### Example Usage
+
+**Basic extraction with original views only:**
+```bash
+python extraction.py \
+  --data_folder ./datasets/ \
+  --dataset yollava \
+  --split train \
+  --variation normal \
+  --n_training_views 3 \
+  --features_folder ./features/
+```
+
+**Extraction with data augmentation:**
+```bash
+python extraction.py \
+  --data_folder ./datasets/ \
+  --dataset this-is-my \
+  --split train \
+  --variation augment \
+  --n_augment 5 \
+  --multi_concept \
+  --features_folder ./features/
+```
+
 
 
 ## 🚀 TODOs

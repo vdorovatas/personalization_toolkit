@@ -232,24 +232,32 @@ class Extractor(torch.nn.Module):
 
 #Model Used to extract the training views for each object
 class Train_Extractor(torch.nn.Module):
-    # Initialize class
     def __init__(self, args):
         super(Train_Extractor, self).__init__()
         with torch.no_grad():
             self.args = args
-                # DinoV2 model
+            self.device = self.args.device
+            
+            # Always load DINO and Grounding DINO
             self.dino_transforms=transforms.Compose([
-                    transforms.Resize(size=518, interpolation=InterpolationMode.BICUBIC, max_size=None, antialias=None),
-                    transforms.CenterCrop(size=(518, 518)),
-                    transforms.ToTensor(),
-                    transforms.Normalize(mean=torch.tensor([0.4850, 0.4560, 0.4060]), std=torch.tensor([0.2290, 0.2240, 0.2250])),])
-            self.dino_model=torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14').to(args.device)
+                                transforms.Resize(size=518, interpolation=InterpolationMode.BICUBIC, max_size=None, antialias=None),
+                                transforms.CenterCrop(size=(518, 518)),
+                                transforms.ToTensor(),
+                                transforms.Normalize(mean=torch.tensor([0.4850, 0.4560, 0.4060]), std=torch.tensor([0.2290, 0.2240, 0.2250])),])
+            self.dino_model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitl14').to(args.device)
             self.g_dino_processor = GroundingDinoProcessor.from_pretrained("IDEA-Research/grounding-dino-base")
             self.g_dino_model = GroundingDinoForObjectDetection.from_pretrained("IDEA-Research/grounding-dino-base").to(args.device)
-            self.device = self.args.device
-            segmenter_id = "facebook/sam-vit-base"
-            self.segmentator = AutoModelForMaskGeneration.from_pretrained(segmenter_id).to(self.device)
-            self.processor = AutoProcessor.from_pretrained(segmenter_id)
+            
+            # Only load SAM if grounding_sam is enabled
+            if args.grounding_sam:
+                segmenter_id = "facebook/sam-vit-base"
+                self.segmentator = AutoModelForMaskGeneration.from_pretrained(segmenter_id).to(self.device)
+                self.processor = AutoProcessor.from_pretrained(segmenter_id)
+                print("✓ SAM model loaded")
+            else:
+                self.segmentator = None
+                self.processor = None
+                print("✓ SAM model skipped (grounding_sam=False)")
 
     # Forward pass into DinoV2 model
     def forward_dino(self, image):

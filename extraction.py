@@ -25,16 +25,13 @@ def setup_args():
     parser.add_argument('--data_folder', type=str,
                         default='/fsx/ad/vlm/github_datasets_test/',
                         help='Main dataset storage directory')
-    parser.add_argument('--save_folder', type=str,
-                        default='./save_folder/',
-                        help='Results storage directory')
 
     # Device configuration: allow user to pass a comma-separated list of visible device IDs
-    parser.add_argument('--device', type=str, default=None, help='Device to process (e.g. cuda:0). If None, derived from --device_ids')
     parser.add_argument('--device_ids', type=str, default="0,1,2,3",
                         help='Comma-separated list of physical device ids to expose (e.g. "0,1")')
 
     # Data loading configuration
+    parser.add_argument('--task', default='extraction', help='Task to be solved')
     parser.add_argument('--batch_size', type=int, default=1, help='Batch size')
     parser.add_argument('--split', default='train', help='Data split (train/val/test)')
     parser.add_argument('--num_workers', type=int, default=8, help='Number of dataloader workers')
@@ -46,12 +43,7 @@ def setup_args():
     parser.add_argument('--dino_patch_size', type=int, default=14, help='DINO transformer patch size')
     parser.add_argument('--dino_embedding_size', type=int, default=1024, help='DINO transformer embedding size')
 
-    # Model configuration - VLM
-    parser.add_argument('--vlm_model', default="OpenGVLab/InternVL3-14B", help='Which VLM model to use')
-
     # Training views configuration
-    parser.add_argument('--task', default='extraction', help='Task to be solved')
-    parser.add_argument('--training_views_path', default=None, help='Path to training features for each personalized object')
     parser.add_argument('--n_training_views', default=5, type=int, help='Number of training views for each personalized object')
 
     # Detection and masking parameters
@@ -61,9 +53,6 @@ def setup_args():
     # Augmentation configuration
     parser.add_argument('--variation', default='normal', help='Training views to use: normal, augmented or 1.1')
     parser.add_argument('--n_augment', type=int, default=9, help='Number of augmentations per training view')
-
-    # Visualization
-    parser.add_argument('--show', action='store_true', help='Show image and corresponding labels')
 
     args, _ = parser.parse_known_args()
     # convert device_ids string -> list[int]
@@ -75,38 +64,29 @@ def configure_environment(args) -> None:
     """
     Configure CUDA environment based on device IDs from arguments.
     This MUST be called BEFORE importing torch or any library that queries CUDA.
-    It also sets args.device to the in-process visible device index (e.g. 'cuda:0').
+    Sets args.device to the first visible device (always 'cuda:0' after env setup).
     """
     if hasattr(args, 'device_ids') and args.device_ids:
         # Convert list of device IDs to comma-separated string (no spaces)
         device_ids_str = ','.join(map(str, args.device_ids))
         os.environ["CUDA_VISIBLE_DEVICES"] = device_ids_str
         # Inside this Python process, visible GPUs will be reindexed 0..(n-1).
-        # Use the first visible device as default unless user specified --device explicitly.
-        if args.device is None:
-            args.device = "cuda:0"
+        # Always use the first visible device (cuda:0)
+        args.device = "cuda:0"
         print(f"✓ CUDA_VISIBLE_DEVICES set to: {device_ids_str}")
         print(f"✓ Using {len(args.device_ids)} GPU(s) (process-visible indices 0..{len(args.device_ids)-1})")
+        print(f"✓ Using device: {args.device}")
     else:
         # Default to first GPU
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-        if args.device is None:
-            args.device = "cuda:0"
+        args.device = "cuda:0"
         print("✓ CUDA_VISIBLE_DEVICES set to: 0 (default)")
         print("✓ Using 1 GPU (process-visible index 0)")
+        print(f"✓ Using device: {args.device}")
 
 # ------------------ Now parse args and configure env BEFORE torch ------------------
 args = setup_args()
 
-# Example modifications you had in your script (kept)
-#args.dataset='myvlm'
-#args.task = 'extraction'
-#args.device_ids=[0, 1, 2, 3]
-#args.vlm_model="OpenGVLab/InternVL3-14B"
-#args.n_training_views = 1
-#args.variation="augment"
-#args.n_augment=1
-#args.grounding_sam = True
 if args.variation=='normal':
     args.n_augment=1
 
@@ -116,15 +96,6 @@ configure_environment(args)
 # Now it is safe to import torch and other cuda-using libraries
 import torch
 import matplotlib.pyplot as plt
-
-# Optionally set torch to use the selected device index (in-process index)
-try:
-    # pick numeric index from args.device (e.g. 'cuda:0' -> 0)
-    if args.device and args.device.startswith("cuda:"):
-        device_idx = int(args.device.split(':')[1])
-        torch.cuda.set_device(device_idx)
-except Exception as e:
-    print(f"Warning: couldn't set torch.cuda device explicitly: {e}")
 
 # now do the rest of the imports that may depend on torch/cuda availability
 from utils import (
