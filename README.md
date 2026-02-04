@@ -82,17 +82,39 @@ pip install -e .
 ---
 
 ## 🚀 Evaluation
+
 ### Dataset Folder Structure
-Download the datasets and put them in the same folder with the following structure:
-- myvlm
-  - data
-    - [concepts]
-- YoLLaVA
-  - test
-    - [concepts]
-  - train
-    - [concepts]
-- This-is-My-Img
+
+Download the datasets and organize them with the following structure:
+```
+myvlm/
+└── data/
+    └── [29 concepts]/
+
+YoLLaVA/
+├── train/
+│   └── [40 concepts]/
+└── test/
+    └── [40 concepts]/
+
+This-is-My-Img/
+├── Single-concept/
+│   ├── train/
+│   │   └── [14 concepts]/
+│   ├── test/
+│   │   └── [14 concepts]/
+│   └── this-is-my-visual-qa-ambiguity.json
+│
+└── Multi-concept/
+    ├── train/
+    │   └── [21 concepts]/
+    ├── test/
+    │   └── [11 concept pairs]/
+    └── VQA/
+        └── [VQA files for each multi-concept pair]
+```
+    
+
 
 ## 🚀 TODOs
 ### 🧑‍💻 Code Release
