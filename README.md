@@ -8,10 +8,8 @@
 - 📂 Dataset: This-is-My-Img  
 - ⚙️ Installation  
 - 🚀 Evaluation
-
-- 🚀 TODOs  
+- 📌 TODOs  
 - 📚 Citation  
-- 📌 Contribution Guidelines  
 
 ---
 
