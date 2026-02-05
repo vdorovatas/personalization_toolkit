@@ -782,7 +782,7 @@ class AzureOpenAILLM:
 
 class Azure_evaluate:
     def __init__(self):
-        config_file = "../config.ini"
+        config_file = "./config.ini"
         os.environ["CONFIG_FILE"] = config_file
         self.llm_model = AzureOpenAILLM(os.environ["CONFIG_FILE"]).get_azure_openai_llm()
     def evaluate_answer(self, question, pred, answer):

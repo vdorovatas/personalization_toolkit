@@ -240,9 +240,12 @@ python vqa.py \
 | `--device_ids` | integer(s) | GPU device ID(s) to use |
 | `--grounding_sam` | flag | Load features from `gsam/` subdirectory |
 
+Please put your OpenAI api-key in the config.ini file in the same directory.
+
 ### Output
 
 VQA evaluation results with question-answer accuracy metrics.
+
 Results are saved to `results/` directory as `.json` and '.txt' files containing per concept and overal accuracies.
 
 ## 🚀 TODOs
