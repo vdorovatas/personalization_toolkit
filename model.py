@@ -18,6 +18,7 @@ import torchvision.transforms as T
 from PIL import Image
 from torchvision.transforms.functional import InterpolationMode
 from transformers import AutoModel, AutoTokenizer
+import matplotlib.pyplot as plt
 
 class Personalized_InternVL(torch.nn.Module):
     IMAGENET_MEAN = (0.485, 0.456, 0.406)
@@ -142,6 +143,7 @@ class Personalized_InternVL(torch.nn.Module):
         with torch.no_grad():
             # set the max number of tiles in `max_num`
             question=question[0]
+            #import pdb;pdb.set_trace()
             pixel_values = self.load_image(image, max_num=1).to(torch.bfloat16).to(self.args.device)
             generation_config = dict(max_new_tokens=50, do_sample=False)
 
@@ -291,6 +293,14 @@ class Train_Extractor(torch.nn.Module):
             )
         
         return dino_features
+    
+    def bbox_to_mask(self, width, height, bbox):
+        x_min, y_min, x_max, y_max = bbox[0], bbox[1], bbox[2], bbox[3]
+        x_min, y_min, x_max, y_max = map(int, bbox)
+        mask_shape = (width, height)
+        bbox_mask = np.zeros(mask_shape, dtype=bool)
+        bbox_mask[y_min:y_max, x_min:x_max] = True
+        return bbox_mask
     
     def forward_grounding_dino(self, image, text, use_g_sam=True):
         # FOR NOW: only batch_size = 1 

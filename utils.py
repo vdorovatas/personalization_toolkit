@@ -23,9 +23,10 @@ def setup_args():
     parser.add_argument('--dataset', default='MyVLM', help='Dataset to process')
     parser.add_argument('--data_folder', type=str, default='/data/datasets/zeroshot-seg/personalization/', help='Main dataset storage directory')
     parser.add_argument('--save_folder', type=str, default='results/', help='Main dataset storage directory')
-    parser.add_argument('--features_folder', type=str, default='/data/datasets/zeroshot-seg/personalization/', help='Main dataset storage directory')
+    parser.add_argument('--features_folder', type=str, default='./features_folder/', help='Main dataset storage directory')
+    parser.add_argument('--json_path', type=str, default=None, help='JSON path for VQA')
     parser.add_argument('--device', type=str, default='cuda:0',help='Device to process')
-    parser.add_argument('--device_ids', default=[0,1,2,3,4,5,6,7],help='Visible Devices to process')
+    parser.add_argument('--device_ids', default=[7],help='Visible Devices to process')
     parser.add_argument('--batch_size', type=int, default=1, help='Batch size')
     parser.add_argument('--split', default='train', help='Data Split')
     parser.add_argument('--num_workers', type=int, default=8, help='Number of dataloder workers')
@@ -188,7 +189,7 @@ def get_objects_features(args, my_objects): #HERE
     if args.grounding_sam:
         features_path = os.path.join(features_path,"gsam")
     if args.multi_concept:
-        features_path=os.path.join(args.features_folder,args.dataset.lower(),'multi_concept','extracted_features/')
+        features_path=os.path.join(args.features_folder,args.dataset.lower(),'multi_concept','extracted_features/gsam/')
     
 
     #######temporary Vaggelis extractions
@@ -410,6 +411,8 @@ def save_sample_features(args, features,aug_index=0):
             features_path=os.path.join(features_path,'gsam/')
         if args.multi_concept:
             features_path=os.path.join(args.features_folder,args.dataset.lower(),'multi_concept','extracted_features/')
+            if args.grounding_sam:
+                features_path=os.path.join(features_path,'gsam/')
         features_path=features_path+features["img_path"][b].split('/')[-2]+'/'+features["img_path"][b].split('/')[-1].split('.')[0]+f'_{aug_index}.pt'
         features["feat_path"] .append(features_path)
         features_dir = os.path.dirname(features_path)
@@ -585,45 +588,44 @@ def build_question_prompt(
         )
     return prompt
 
-def get_query(args,label,color,question=None,context=None, label_map=None, full_question=None):
-    if label_map!=None:
-        label=label_map[label]
-    if full_question!=None:
-        prompts=['USER: <image>\nIn this image, the entity enclosed in a {} box is called \"{}\". Never mention the box and its color and answer the following question about \"{}\" : {} .\nASSISTANT:'.format(color,label.upper(),label.upper(),full_question)]
-    elif question==None or question=='':
-        if args.task=='clip_score':
-            #prompts=['USER: <image>\nIn this image, the entity enclosed in a {} box is called \"{}\". Never mention the box and its color and caption the image and make sure to include the word \"{}\" in the caption.\nASSISTANT:'.format(color,label.upper(),label.upper())]
-            prompts=['USER: <image>\nIn this image, the entity enclosed in a {} box is called \"{}\". Describe what \"{}\" is doing using their given name. Describe the image too.\nASSISTANT:'.format(color,label.capitalize(),label.capitalize(),label.capitalize())]
-        elif args.task=='comparison_yollava':
-            if len(labels)>1:
-                #prompts = ['USER: <image>\nIn this image, the entities enclosed in {} boxes are called "{}" respectively. Describe what "{}" are doing using their given names. Describe the image too.\nASSISTANT:'.format(
-                #    ", ".join(colors), ", ".join(label.capitalize() for label in labels), ", ".join(label.capitalize() for label in labels)
-                #)]
-                #prompts = ['USER: <image>\n' +"\n".join(f"In this image, the entity enclosed in a {color} box is called \"{label.capitalize()}\"" for color, label in zip(colors, labels)) + '\nDo not mention any of the bounding boxes or their colors.' +'\nDescribe what "{}" are doing using their given names.'.format(", ".join(label.capitalize() for label in labels)) +"\nDescribe the image too.\nASSISTANT:"]
-                prompts = ['USER: <image>\n' +"\n".join(f"In this image, the entity enclosed in a {color} box is called \"{label.capitalize()}\"" for color, label in zip(colors, labels)) + '\nDo not mention any of the bounding boxes or their colors.' +'\nDescribe what "{}" are doing using their given names."\nASSISTANT:"'.format(", ".join(label.capitalize() for label in labels))]
-
-                
-            else:
-                prompts = ['USER: <image>\nIn this image, the entity enclosed in {} box is called "{}".  Do not mention any of the bounding boxes or their colors. Describe what "{}" is doing using its given name.\nASSISTANT:'.format(
-                    ", ".join(colors), ", ".join(label.capitalize() for label in labels), ", ".join(label.capitalize() for label in labels)
-                )]
+def get_query(args, labels, colors, question=None, context=None, label_map=None, full_question=None):
+    # Handle both single object (string) and multiple objects (list)
+    if isinstance(labels, str):
+        labels = [labels]
+    if isinstance(colors, str):
+        colors = [colors]
+    
+    # Build multi-object prompt
+    if len(labels) > 1:
+        object_descriptions = [
+            f'the entity enclosed in a {color} box is called "{label.upper()}"'
+            for color, label in zip(colors, labels)
+        ]
+        intro = "In this image, " + " and ".join(object_descriptions) + "."
+    else:
+        intro = f'In this image, the entity enclosed in a {colors[0]} box is called "{labels[0].upper()}".'
+    
+    if full_question is not None:
+        prompts = f'USER: <image>\n{intro} Never mention the boxes and their colors. Answer the following question: {full_question}\nASSISTANT:'
+    elif question is None or question == '':
+        if args.task == 'clip_score':
+            prompts = f'USER: <image>\n{intro} Describe what {" and ".join([l.capitalize() for l in labels])} {"are" if len(labels) > 1 else "is"} doing using their given names. Describe the image too.\nASSISTANT:'
         else:
-            prompts=['USER: <image>\n Describe the contents of the {} bounding box.\nASSISTANT:'.format(color)]
-
-            #prompts=['USER: <image>\nIn this image, the entity enclosed in a {} box is called \"{}\". Describe what \"{}\" is doing using its given name. Describe the image too.\nASSISTANT:'.format(color,label.capitalize(),label.capitalize(),label.capitalize())]
-        #    prompts=['USER: <image>\nIn this image, there is a {} box. Please refer to the entity inside the {} box as \"{}\". Generate a caption describing the image, make sure to use \"{}\" when mentioning the entity in the {} box.\nASSISTANT:'.format(color,color,label.capitalize(),label.capitalize(),label.capitalize(),color)]
-    elif args.task=='vqa' or args.task=='vqa_names' or args.task=="vqa_names_ambiguity":
-        prompts=['USER: <image>\nIn this image, the entity enclosed in a {} box is called \"{}\". Never mention the box and its color and answer the following question about \"{}\" : {} .\nASSISTANT:'.format(color,label.upper(),label.upper(),question)]
-    elif args.task=='tqa':
-        prompts=['Read this text: {}\nAnswer the following question about \"{}\" : {}\nASSISTANT:'.format(context,label.upper(),question)]
-    elif args.task=='base_vlm_vqa' or args.task=='base_vlm_vqa_names' or args.task=="base_vlm_vqa_names_ambiguity":
-        prompts=['USER: <image>\n{}\nASSISTANT:'.format(question)]
-    if args.vlm_model=='GPT-4o':
-        prompts=build_question_prompt(
-            entity_name=label,
-            color=color,
+            prompts = f'USER: <image>\n Describe the contents of the {" and ".join(colors)} bounding boxes.\nASSISTANT:'
+    elif args.task == 'vqa' or args.task == 'vqa_names' or args.task == "vqa_names_ambiguity":
+        prompts = f'USER: <image>\n{intro} Never mention the boxes and their colors. Answer the following question: {question}\nASSISTANT:'
+    elif args.task == 'tqa':
+        prompts = f'Read this text: {context}\nAnswer the following question about "{labels[0].upper()}": {question}\nASSISTANT:'
+    elif args.task == 'base_vlm_vqa' or args.task == 'base_vlm_vqa_names' or args.task == "base_vlm_vqa_names_ambiguity":
+        prompts = f'USER: <image>\n{question}\nASSISTANT:'
+    
+    if args.vlm_model == 'GPT-4o':
+        prompts = build_question_prompt(
+            entity_name=labels[0],
+            color=colors[0],
             question=question
         )
+    
     return prompts
 
 
@@ -799,3 +801,34 @@ class Azure_evaluate:
         "DO NOT PROVIDE ANY OTHER OUTPUT TEXT OR EXPLANATION."
         ans=self.llm_model.invoke([HumanMessage(content=prompt)])
         return ans.content
+import os
+from pathlib import Path
+
+def get_cat_folders_from_features(args):
+    """
+    Extracts category folders from the dataset's features folder.
+    
+    Args:
+        args: Arguments object containing features_folder and dataset
+    
+    Returns:
+        List of folder paths for each category
+    """
+    # Build the correct path based on whether multi_concept is enabled
+    if hasattr(args, 'multi_concept') and args.multi_concept:
+        features_path = Path(args.features_folder) / args.dataset.lower() / "multi_concept" / "extracted_features"
+    else:
+        features_path = Path(args.features_folder) / args.dataset.lower() / "extracted_features"
+    
+    # Add gsam subfolder if using grounding SAM
+    if hasattr(args, 'grounding_sam') and args.grounding_sam:
+        features_path = features_path / "gsam"
+    
+    if not features_path.exists():
+        print(f"Warning: Features path {features_path} does not exist")
+        return []
+    
+    # Get all folders
+    cat_folders = [str(folder) for folder in features_path.iterdir() if folder.is_dir()]
+    
+    return cat_folders

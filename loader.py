@@ -378,13 +378,11 @@ class This_is_my_Dataset(BaseImageDataset):
         
         # Construct data path
         assert args.multi_concept is not None, "For This-is-My-Img dataset please provide a value for args.multi_concept flag."
-        if args.multi_concept: #HERE
+        if args.multi_concept:
             data_path = os.path.join(args.data_folder, "This-is-My-Img/Multi-concept", args.split)
         else:
             data_path = os.path.join(args.data_folder, "This-is-My-Img/Single-concept", args.split)
         
-
-        #import pdb;pdb.set_trace()
         # Load dataset files
         if args.split=="train":
             # Get all image files
@@ -409,7 +407,6 @@ class This_is_my_Dataset(BaseImageDataset):
             assert args.test_split is not None, "For This-is-My dataset in test split, args.test_split must be specified (e.g.,'Positive', 'Negative (other), Negative (hard)')."
             if args.dataset=="this-is-my" and not args.multi_concept:
                 data_path = os.path.join(data_path,args.test_split)
-            #import pdb;pdb.set_trace()
             self.dataset = glob.glob(os.path.join(data_path, "**", "*.png"))
     
     def __getitem__(self, index: int) -> Tuple:
@@ -444,7 +441,11 @@ class This_is_my_Dataset(BaseImageDataset):
 
 
 class This_is_my_VQA(Dataset):
-    """Visual Question Answering dataset for 'This is My' dataset."""
+    """Visual Question Answering dataset for 'This is My' dataset.
+    
+    This version builds the dataset directly from the VQA JSON file,
+    ensuring only images with QA pairs are loaded.
+    """
     
     # Label mapping for proper names with apostrophes
     LABEL_MAP_DEFAULT = {
@@ -496,41 +497,24 @@ class This_is_my_VQA(Dataset):
         self.transform = transform
         self.transform_dino = transform_dino
         
-        # Select appropriate JSON file based on task
-        json_filename = 'this-is-my-visual-qa.json'
-        if args.task in ['vqa_names_ambiguity', 'base_vlm_vqa_names_ambiguity']:
-            json_filename = 'this-is-my-visual-qa-ambiguity.json'
-        elif args.task in ['vqa_names_ambiguity_full', 'base_vlm_vqa_names_ambiguity_full']:
-            json_filename = 'this-is-my-visual-qa-ambiguity-full.json'
-        
-        json_path = os.path.join(
-            args.data_folder,
-            "this-is-my/rgb_dataset/sampled/selected_frames/",
-            json_filename
-        )
-        
-        # Construct data path
-        data_path = os.path.join(
-            args.data_folder,
-            "this-is-my/rgb_dataset/sampled/selected_frames/",
-            args.split
-        )
-        
-        # Override path for VQA tasks
-        if 'vqa' in args.task:
-            data_path = "/mnt/lustrefs/data/datasets/zeroshot-seg/personalization/this-is-my/rgb_dataset/sampled/selected_frames/validation_vqa/"
-        
         # Load VQA data
-        with open(json_path, 'r') as file:
+        with open(args.json_path, 'r') as file:
             self.vqa = json.load(file)
         
-        # Load dataset files
-        if args.specific_cat is not None:
-            pattern = os.path.join(data_path, args.specific_cat, "*.png")
-            print(f"Loading from: {pattern}")
-            self.dataset = glob.glob(pattern)
-        else:
-            self.dataset = glob.glob(os.path.join(data_path, "**", "*.png"))
+        # Build dataset entries from VQA JSON
+        self.dataset_entries = []
+        for obj_name, image_qa_dict in self.vqa.items():
+            for img_path, qa_info in image_qa_dict.items():
+                img_path = os.path.join(os.path.dirname(args.json_path), img_path.lstrip('./'))
+                # Only add if image exists
+                if os.path.exists(img_path):
+                    self.dataset_entries.append({
+                        'img_path': img_path,
+                        'obj_name': obj_name,
+                        'qa_info': qa_info
+                    })
+                else:
+                    print("Couldn't load the VQA for Image: {}".format(img_path))
         
         # Select appropriate label mapping
         name_tasks = [
@@ -555,59 +539,68 @@ class This_is_my_VQA(Dataset):
             Tuple of (img, img_dino, path, label, question, answer, None, 
                      label_map, open_question, full_answer)
         """
+        entry = self.dataset_entries[index]
+        img_path = entry['img_path']
+        obj_name = entry['obj_name']
+        qa_info = entry['qa_info']
+        
         # Load and convert image to RGB
-        img_raw = Image.open(self.dataset[index]).convert("RGB")
+        img_raw = Image.open(img_path).convert("RGB")
         
         # Apply transforms
         img = self.transform(img_raw)
         img_dino = self.transform_dino(img_raw)
         
-        # Extract metadata
-        path = self.dataset[index]
-        filename = path.split('/')[-1]
-        label = path.split('/')[-2].split('-')[0]
+        # Extract QA information
+        question_template = qa_info['question']
+        options = qa_info.get('options', {})
         
-        # Initialize QA variables
-        question = None
-        answer = None
+        # Format question with options
+        if options:
+            question = (
+                f"{question_template}"
+                f"A.{options['A']} or "
+                f"B.{options['B']}"
+            )
+        else:
+            question = question_template
+        
+        # Replace placeholder with label
+        question = question.replace('<sks>', self.label_map.get(obj_name, obj_name))
+        
+        # Format answer
+        if 'correct_answer' in qa_info:
+            correct_ans = qa_info['correct_answer']
+            if options:
+                answer = f"{correct_ans}.{options[correct_ans]}"
+            else:
+                answer = correct_ans
+        elif 'answer' in qa_info:
+            answer = qa_info['answer']
+        else:
+            answer = None
+        
+        # Try to get GPT answer if available
         full_answer = None
         open_question = None
-        
-        # Find matching QA pair
-        for conv in self.vqa[label]:
-            if filename == conv.split('/')[-1]:
-                # Format question with options
-                question = (
-                    f"{self.vqa[label][conv]['question']}"
-                    f"A.{self.vqa[label][conv]['options']['A']} or "
-                    f"B.{self.vqa[label][conv]['options']['B']}"
-                )
-                question = question.replace('<sks>', self.label_map[label])
-                
-                # Format answer
-                correct_ans = self.vqa[label][conv]['correct_answer']
-                answer = f"{correct_ans}.{self.vqa[label][conv]['options'][correct_ans]}"
-                
-                # Try to get GPT answer if available
-                try:
-                    full_answer = self.vqa[label][conv]["gpt_answer"]
-                    open_question = self.vqa[label][conv]['question'].replace(
-                        '<sks>', self.label_map[label]
-                    )
-                    full_answer = full_answer.replace('<sks>', self.label_map[label])
-                except KeyError:
-                    pass
+        try:
+            full_answer = qa_info.get("gpt_answer")
+            if full_answer:
+                full_answer = full_answer.replace('<sks>', self.label_map.get(obj_name, obj_name))
+            open_question = question_template.replace('<sks>', self.label_map.get(obj_name, obj_name))
+        except (KeyError, AttributeError):
+            pass
         
         # Convert to numpy for batch processing
         img = (img.permute([1, 2, 0]) * PIXEL_SCALE).int().numpy()
         img_dino = (img_dino.permute([1, 2, 0]) * PIXEL_SCALE).int().numpy()
         
-        return (img, img_dino, path, label, question, answer, None,
+        return (img, img_dino, img_path, obj_name, question, answer, None,
                 self.label_map, open_question, full_answer)
     
     def __len__(self) -> int:
         """Return the size of the dataset."""
-        return len(self.dataset)
+        return len(self.dataset_entries)
 
 
 class YoLLavaDataset(BaseImageDataset):
@@ -686,7 +679,10 @@ class YoLLavaDataset(BaseImageDataset):
 
 
 class YoLLavaDatasetVQA(Dataset):
-    """Visual Question Answering dataset for YoLLava."""
+    """Visual Question Answering dataset for YoLLava.
+    
+    This version builds the dataset directly from the VQA JSON file.
+    """
     
     def __init__(self, args, transform, transform_dino, **kwargs):
         """
@@ -702,26 +698,21 @@ class YoLLavaDatasetVQA(Dataset):
         self.transform = transform
         self.transform_dino = transform_dino
         
-        # Load VQA JSON
-        # json_path = os.path.join(
-        #     args.data_folder, "yollava/yollava-data/", 'yollava-visual-qa.json'
-        # )
-        json_path = "/fsx/ad/vlm/clean_datasets_CVPR2026/yollava/yollava-visual-qa.json"
         
-        
-        with open(json_path, 'r') as file:
+        with open(args.json_path, 'r') as file:
             self.vqa = json.load(file)
         
-        # Construct data path
-        # data_path = os.path.join(args.data_folder, "yollava/yollava-data/", args.split)
-        data_path = "/fsx/ad/vlm/clean_datasets_CVPR2026/yollava/train_1view_448"
-        
-        # if args.split == 'train':
-        #     data_path = os.path.join(data_path, 'labelled')
-        
-        # Load dataset files
-        self.dataset = glob.glob(os.path.join(data_path, "**", "*.png"))
-        print(self.dataset)
+        # Build dataset entries from VQA JSON
+        self.dataset_entries = []
+        for obj_name, image_qa_dict in self.vqa.items():
+            for img_path, qa_info in image_qa_dict.items():
+                # Only add if image exists
+                if os.path.exists(img_path):
+                    self.dataset_entries.append({
+                        'img_path': img_path,
+                        'obj_name': obj_name,
+                        'qa_info': qa_info
+                    })
     
     def __getitem__(self, index: int) -> Tuple:
         """
@@ -734,104 +725,58 @@ class YoLLavaDatasetVQA(Dataset):
             Tuple of (img, img_dino, path, label, question, answer, 
                      None, None, None, None)
         """
+        entry = self.dataset_entries[index]
+        img_path = entry['img_path']
+        obj_name = entry['obj_name']
+        qa_info = entry['qa_info']
+        
         # Load and convert image to RGB
-        img_raw = Image.open(self.dataset[index]).convert("RGB")
+        img_raw = Image.open(img_path).convert("RGB")
         
         # Apply transforms
         img = self.transform(img_raw)
         img_dino = self.transform_dino(img_raw)
         
-        # Extract metadata
-        path = self.dataset[index]
-        filename = path.split('/')[-1]
-        label = path.split('/')[-2]
+        # Extract QA information
+        question_template = qa_info['question']
+        options = qa_info.get('options', {})
         
-        # Initialize QA variables
-        question = None
-        answer = None
+        # Format question with options
+        if options:
+            question = (
+                f"{question_template}"
+                f"A.{options['A']} or "
+                f"B.{options['B']}"
+            )
+        else:
+            question = question_template
         
-        # Find matching QA pair
-        for conv in self.vqa[label]:
-            if filename == conv.split('/')[-1]:
-                # Format question with options
-                question = (
-                    f"{self.vqa[label][conv]['question']}"
-                    f"A.{self.vqa[label][conv]['options']['A']} or "
-                    f"B.{self.vqa[label][conv]['options']['B']}"
-                )
-                question = question.replace('<sks>', label)
-                
-                # Format answer
-                correct_ans = self.vqa[label][conv]['correct_answer']
-                answer = f"{correct_ans}.{self.vqa[label][conv]['options'][correct_ans]}"
+        # Replace placeholder
+        question = question.replace('<sks>', obj_name)
+        
+        # Format answer
+        if 'correct_answer' in qa_info:
+            correct_ans = qa_info['correct_answer']
+            if options:
+                answer = f"{correct_ans}.{options[correct_ans]}"
+            else:
+                answer = correct_ans
+        elif 'answer' in qa_info:
+            answer = qa_info['answer']
+        else:
+            answer = None
         
         # Convert to numpy for batch processing
         img = (img.permute([1, 2, 0]) * PIXEL_SCALE).int().numpy()
         img_dino = (img_dino.permute([1, 2, 0]) * PIXEL_SCALE).int().numpy()
         
-        return img, img_dino, path, label, question, answer, None, None, None, None
+        return img, img_dino, img_path, obj_name, question, answer, None, None, None, None
     
     def __len__(self) -> int:
         """Return the size of the dataset."""
-        return len(self.dataset)
+        return len(self.dataset_entries)
     
-class RAPDataset(BaseImageDataset):
-    """Dataset for RAP dataset."""
-    
-    def __init__(self, args, transform, transform_dino, **kwargs):
-        """
-        Initialize RAP dataset.
-        
-        Args:
-            args: Configuration arguments
-            transform: Transform for original size images
-            transform_dino: Transform for DINO model
-            **kwargs: Additional keyword arguments
-        """
-        super().__init__(args, transform, transform_dino)
-        
-        # Construct data path
-        if args.split=='train':
-            data_path = "/fsx/ad/vlm/clean_datasets_CVPR2026/rap/multi-concept/train_1view_pekit/"
-        elif args.split=='validation':
-            data_path = "/fsx/ad/vlm/clean_datasets_CVPR2026/rap/multi-concept/validation/"
-        #data_path = os.path.join(
-        #    args.data_folder, "yollava", args.split
-        #)
-        
-        # Load dataset files
-        #import pdb;pdb.set_trace()
-        self.dataset = glob.glob(os.path.join(data_path, "**", "*.jpg"))
-    
-    def __getitem__(self, index: int) -> Tuple:
-        """
-        Get dataset item by index.
-        
-        Args:
-            index: Index of item to retrieve
-            
-        Returns:
-            Tuple of (img, img_dino, path, label, None, None, None, None, None, None)
-        """
-        # Load and convert image to RGB
-        img_raw = Image.open(self.dataset[index]).convert("RGB")
-        
-        # Set up augmentation if needed
-        self._setup_augmentation(img_raw)
-        
-        # Apply transforms
-        img = self.transform(img_raw)
-        img_dino = self.transform_dino(img_raw)
-        
-        # Extract metadata
-        path = self.dataset[index]
-        label = path.split('/')[-2]
-        
-        # Convert to numpy for batch processing
-        img = self._convert_to_numpy(img)
-        img_dino = self._convert_to_numpy(img_dino)
-        
-        return img, img_dino, path, label, None, None, None, None, None, None
+
 
 class MyVLMDataset(BaseImageDataset):
     """Dataset for MyVLM dataset."""
@@ -964,15 +909,6 @@ def get_dataloader(args):
         dataloader = torch.utils.data.DataLoader(dataset, **dataloader_params)
         return dataloader, OBJECTS_YOLLAVA, CONTEXT_POOL_YOLLAVA
     
-    elif args.dataset == 'rap':
-        dataset = RAPDataset(
-            args,
-            transform=base_transform,
-            transform_dino=dino_transform,
-        )
-        dataloader = torch.utils.data.DataLoader(dataset, **dataloader_params)
-        return dataloader, OBJECTS_RAP, CONTEXT_POOL_RAP
-    
     # This-is-my Dataset
     elif args.dataset == 'this-is-my':
         vqa_tasks = [
@@ -996,12 +932,11 @@ def get_dataloader(args):
         
         dataloader = torch.utils.data.DataLoader(dataset, **dataloader_params)
         
-        # MODIFICATION: Return multi-concept object list if in multi-concept mode
+        # Return multi-concept object list if in multi-concept mode
         if args.multi_concept:
             return dataloader, OBJECTS_THIS_IS_MY_MULTI, CONTEXT_POOL_THIS_IS_MY
         else:
             return dataloader, OBJECTS_THIS_IS_MY, CONTEXT_POOL_THIS_IS_MY
     
-    # ADD THIS ELSE BLOCK - it was missing!
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")

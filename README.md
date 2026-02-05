@@ -68,7 +68,7 @@ This-is-My-Img/
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/your-repo/pekit.git
+git clone https://github.com/vdorovatas/personalization_toolkit.git
 cd pekit
 pip install -r requirements.txt
 ```
@@ -207,6 +207,43 @@ python detection.py \
 ### Output
 
 Results are saved to `results/` directory as `.npy` files containing precision and recall metrics.
+
+## Task 2: Visual Question Answering (VQA) Evaluation
+
+Evaluate personalized visual question answering on your dataset:
+
+```bash
+python vqa.py \
+  --dataset this-is-my \
+  --split test \
+  --task vqa \
+  --features_folder ./features/ \
+  --vlm_model OpenGVLab/InternVL3-14B \
+  --n_training_views 5 \
+  --multi_concept \
+  --device_ids 7 \
+  --json_path ./datasets/This-is-My-Img/Multi-concept/this-is-my-visual-qa-multi-concept.json
+```
+
+### Key Arguments
+
+| Argument | Options/Type | Description |
+|----------|--------------|-------------|
+| `--dataset` | `yollava`, `this-is-my` | Dataset to evaluate |
+| `--split` | `test`| Data split to process |
+| `--task` | `vqa` | Task type for visual question answering |
+| `--vlm_model` | model path | Vision-Language Model to use (e.g., `OpenGVLab/InternVL3-14B`) |
+| `--n_training_views` | integer | Number of reference feature files to load per concept |
+| `--features_folder` | path | Directory containing pre-extracted features |
+| `--json_path` | path | Path to VQA question-answer JSON file |
+| `--multi_concept` | flag | Enable multi-concept VQA evaluation mode (for `this-is-my` dataset) |
+| `--device_ids` | integer(s) | GPU device ID(s) to use |
+| `--grounding_sam` | flag | Load features from `gsam/` subdirectory |
+
+### Output
+
+VQA evaluation results with question-answer accuracy metrics.
+Results are saved to `results/` directory as `.json` and '.txt' files containing per concept and overal accuracies.
 
 ## 🚀 TODOs
 ### 🧑‍💻 Code Release
