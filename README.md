@@ -253,33 +253,11 @@ Results are saved to `results/` directory as `.json` and '.txt' files containing
 
 #### 🔹 Core Pipeline
 
-- [ ] View Extraction  
-  - [ ] Implement module for open-vocabulary segmentation (SAM / GroundedDINO)  
-  - [ ] Extract patch-level features  
-  - [ ] Save embedding vectors in memory  
-
-- [ ] Retrieval System  
-  - [ ] Thresholding logic & object matching  
-  - [ ] Multiple concept detection  
-
-- [ ] Prompting Integration  
-  - [ ] LVLM input formatting  
-  - [ ] Prompt templates for VQA & captioning  
-  - [ ] Overlay generation for visual cues  
----
-
-### 🧪 Evaluation & Benchmarks
-
-- [ ] Scripts  
-  - [ ] Eval suite for VQA  
-  - [ ] Eval suite for captioning  
-  - [ ] Ablation tests  
-
-- [ ] Metrics  
-  - [ ] Accuracy/Precision/recall for personalized retrieval  
-  - [ ] Accuracy for Multiple-choice VQA
-  - [ ] Accuracy for Open-ended VQA
-  - [ ] Captioning Recall
+- [ ] Video-QA evaluation
+- [ ] Captioning Recall
+- [ ] Visualization
+- [ ] Environment extraction
+- [ ] Results sanity checks
 
 ---
 
