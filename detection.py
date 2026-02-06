@@ -16,10 +16,22 @@ from pathlib import Path
 import argparse
 import os
 
-import numpy as np
 import matplotlib.pyplot as plt
-import torch
 from PIL import Image
+##temporary
+import random
+import numpy as np
+import torch
+
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
+torch.cuda.manual_seed_all(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+######
+
 
 from utils import (
     draw_bounding_box,
@@ -33,6 +45,10 @@ from utils import (
 )
 from loader import get_dataloader
 from model import Extractor
+
+
+
+
 
 
 # Constants
@@ -69,9 +85,9 @@ def setup_args():
                         help='Main dataset storage directory')
     
     # Device configuration
-    parser.add_argument('--device', type=str, default='cuda:0',
+    parser.add_argument('--device', type=str, default='cuda:1',
                         help='Device to process')
-    parser.add_argument('--device_ids', default=[0],
+    parser.add_argument('--device_ids', default=[1],
                         help='Visible devices to process')
     
     # Data loading configuration
@@ -97,7 +113,7 @@ def setup_args():
     
     # Training views configuration
     parser.add_argument('--task', default='detection', help='Task to be solved')
-    parser.add_argument('--n_training_views', type=int, required=True, 
+    parser.add_argument('--n_training_views', type=int, default=None,
                         help='Number of training views for each personalized object')
     
     # Detection and masking parameters
@@ -218,12 +234,65 @@ def process_single_image(args, data_batch, mask_extractor, all_obj_features, my_
         list: Detection results including personalized_objects and labels
     """
     image, dino_image, path, *_ = data_batch
+
+    print("\n" + "="*80)
+    print("IMAGE IDENTITY CHECK - Batch 0")
+    print("="*80)
+    
+    # 1. Check paths
+    print(f"\n1. IMAGE PATH:")
+    print(f"   path[0]: {path[0]}")
+    
+    # 2. Check raw image data
+    print(f"\n2. RAW IMAGE DATA:")
+    print(f"   image type: {type(image)}")
+    print(f"   image length: {len(image)}")
+    print(f"   image[0] shape: {image[0].shape}")
+    print(f"   image[0] dtype: {image[0].dtype}")
+    print(f"   image[0] min: {image[0].min()}")
+    print(f"   image[0] max: {image[0].max()}")
+    print(f"   image[0] mean: {image[0].mean():.6f}")
+    print(f"   image[0] sum: {image[0].sum()}")
+    
+    # 3. Check DINO processed image
+    print(f"\n3. DINO IMAGE DATA:")
+    print(f"   dino_image type: {type(dino_image)}")
+    print(f"   dino_image length: {len(dino_image)}")
+    print(f"   dino_image[0] shape: {dino_image[0].shape}")
+    print(f"   dino_image[0] dtype: {dino_image[0].dtype}")
+    print(f"   dino_image[0] min: {dino_image[0].min()}")
+    print(f"   dino_image[0] max: {dino_image[0].max()}")
+    print(f"   dino_image[0] mean: {dino_image[0].mean():.6f}")
+    print(f"   dino_image[0] sum: {dino_image[0].sum()}")
+    
+    # 4. Hash the image data to verify it's identical
+    import hashlib
+    img_bytes = image[0].tobytes()
+    img_hash = hashlib.md5(img_bytes).hexdigest()
+    print(f"\n4. IMAGE HASH:")
+    print(f"   MD5 hash: {img_hash}")
+    
+    dino_bytes = dino_image[0].tobytes()
+    dino_hash = hashlib.md5(dino_bytes).hexdigest()
+    print(f"   DINO image MD5 hash: {dino_hash}")
+    
+    # 5. Check first few pixel values
+    print(f"\n5. SAMPLE PIXEL VALUES:")
+    print(f"   image[0] top-left 3x3:")
+    print(f"   {image[0][:3, :3, 0]}")  # First channel
+    print(f"   dino_image[0] top-left 3x3:")
+    print(f"   {dino_image[0][:3, :3, 0]}")  # First channel
+    
+    print("="*80 + "\n")
+
+
+
     
     # Extract DINO features
     dino_img_features = mask_extractor.forward_dino(dino_image)
     
     # Generate masks using Grounding DINO
-    sam_masks = mask_extractor.forward_grounding_dino(dino_image, ['object'])
+    sam_masks = mask_extractor.forward_grounding_dino(dino_image, ['object.'])
 
     #sam_masks = mask_extractor.forward_sam(dino_image)
     
@@ -240,11 +309,119 @@ def process_single_image(args, data_batch, mask_extractor, all_obj_features, my_
         # Get mean DINO features for each mask
         category_features = apply_mask_dino(args, sam_masks, dino_img_features[batch_idx])
         category_features = torch.stack([feat.mean(dim=0) for feat in category_features])
+
+        nan_count = torch.isnan(category_features).any(dim=1).sum().item()
+        valid_count = (~torch.isnan(category_features).any(dim=1)).sum().item()
+        
+        print(f"    Total masks: {len(category_features)}")
+        print(f"    NaN masks: {nan_count}")
+        print(f"    Valid masks: {valid_count}")
+        print(f"    Path: {path[0].split('/')[-1]}")
         
         # Detect and gather masks
         full_masks, full_masks_labels, something_detected, sim_scores = gather_masks(
             args, category_features, sam_masks[batch_idx], all_obj_features
         )
+
+
+        #Temporary
+        # Add this right after gather_masks is called
+        if batch_idx == 0:  # Only debug first batch
+            print("\n" + "="*80)
+            print("DEBUG: First batch detailed analysis")
+            print("="*80)
+            
+            # 1. Check sam_masks
+            print(f"\n1. SAM MASKS:")
+            print(f"   Type: {type(sam_masks)}")
+            print(f"   Length: {len(sam_masks)}")
+            print(f"   sam_masks[0] type: {type(sam_masks[0])}")
+            print(f"   sam_masks[0] shape: {sam_masks[0].shape}")
+            print(f"   Number of masks detected: {sam_masks[0].shape[0]}")
+            
+            # 2. Check dino_img_features
+            print(f"\n2. DINO IMAGE FEATURES:")
+            print(f"   Type: {type(dino_img_features)}")
+            print(f"   Shape: {dino_img_features.shape}")
+            print(f"   dino_img_features[0] shape: {dino_img_features[0].shape}")
+            
+            # 3. Check category_features BEFORE stacking
+            category_features_raw = apply_mask_dino(args, sam_masks, dino_img_features[0])
+            print(f"\n3. CATEGORY FEATURES (before stacking):")
+            print(f"   Type: {type(category_features_raw)}")
+            print(f"   Length: {len(category_features_raw)}")
+            print(f"   First item shape: {category_features_raw[0].shape}")
+            print(f"   First item mean: {category_features_raw[0].mean().item():.6f}")
+            
+            # 4. Check category_features AFTER stacking and mean
+            category_features_stacked = torch.stack([x.mean(dim=0) for x in category_features_raw])
+            print(f"\n4. CATEGORY FEATURES (after stacking & mean):")
+            print(f"   Shape: {category_features_stacked.shape}")
+            print(f"   First feature vector mean: {category_features_stacked[0].mean().item():.6f}")
+            print(f"   First feature vector norm: {torch.norm(category_features_stacked[0]).item():.6f}")
+            
+            # 5. Check all_obj_features
+            print(f"\n5. ALL OBJECT FEATURES:")
+            print(f"   Type: {type(all_obj_features)}")
+            print(f"   Shape: {all_obj_features.shape}")
+            print(f"   First object features shape: {all_obj_features[0].shape}")
+            print(f"   First object, first view mean: {all_obj_features[0][0].mean().item():.6f}")
+            print(f"   First object, first view norm: {torch.norm(all_obj_features[0][0]).item():.6f}")
+            
+            # 6. Manual cosine similarity calculation for first mask vs first object
+            mask_feat = category_features_stacked[0].to(args.device)  # Shape: (1024,)
+            obj_feat = all_obj_features[0].to(args.device)  # Shape: (N_views, 1024)
+            
+            print(f"\n6. MANUAL COSINE SIMILARITY TEST:")
+            print(f"   mask_feat shape: {mask_feat.shape}")
+            print(f"   obj_feat shape: {obj_feat.shape}")
+            
+            # Compute cosine similarity
+            sim_manual = torch.nn.functional.cosine_similarity(
+                mask_feat.unsqueeze(0).unsqueeze(0),  # (1, 1, 1024)
+                obj_feat.unsqueeze(0),  # (1, N_views, 1024)
+                dim=2,
+                eps=1e-8
+            )
+            print(f"   Similarity scores: {sim_manual[0].cpu().numpy()}")
+            print(f"   Mean similarity: {sim_manual.mean().item():.6f}")
+            print(f"   Max similarity: {sim_manual.max().item():.6f}")
+            
+            # 7. Check what gather_masks actually computes
+            print(f"\n7. GATHER_MASKS SIMULATION:")
+            for m_idx in range(min(3, len(category_features_stacked))):  # First 3 masks
+                mask_feature = category_features_stacked[m_idx]
+                
+                sim = torch.nn.functional.cosine_similarity(
+                    mask_feature.to(args.device), 
+                    all_obj_features.to(args.device), 
+                    dim=2, 
+                    eps=1e-8
+                )
+                sim[torch.isnan(sim) == True] = 0
+                
+                print(f"\n   Mask {m_idx}:")
+                print(f"     sim shape: {sim.shape}")
+                print(f"     sim max per object: {sim.max(dim=1)[0][:5].cpu().numpy()}")  # First 5 objects
+                
+                sim_detect = (sim > args.detect_thresh).float().mean(dim=1)
+                print(f"     Detection scores (thresh={args.detect_thresh}): {sim_detect[:5].cpu().numpy()}")
+                
+                detections = (sim_detect > 0)
+                detected_indice = torch.where(detections == True)[0]
+                print(f"     Detected object indices: {detected_indice.cpu().numpy()}")
+                
+                if len(detected_indice) > 0:
+                    d_indice = torch.unravel_index(torch.argmax(sim, axis=None), sim.shape)[0]
+                    print(f"     Best match object index: {d_indice.item()}")
+                    print(f"     Best match object name: {my_objects_raw[d_indice]}")
+                    print(f"     Max similarity score: {sim.max().item():.6f}")
+            
+            print("\n" + "="*80)
+            print("END DEBUG")
+            print("="*80 + "\n") 
+
+
         
         personalized_objects = []
         bboxes = []
@@ -669,6 +846,30 @@ if __name__ == "__main__":
     
     # Initialize segmentation model
     mask_extractor = Extractor(args)
+
+
+    # Right after: mask_extractor = Extractor(args)
+    import hashlib
+    print("\n" + "="*80)
+    print("GROUNDING DINO MODEL CHECK")
+    print("="*80)
+    print(f"Model type: {type(mask_extractor.g_dino_model)}")
+    print(f"Model device: {next(mask_extractor.g_dino_model.parameters()).device}")
+    print(f"Model dtype: {next(mask_extractor.g_dino_model.parameters()).dtype}")
+
+    # Check specific model parameters
+    model_params = list(mask_extractor.g_dino_model.parameters())
+    if len(model_params) > 0:
+        first_param = model_params[0]
+        print(f"First parameter shape: {first_param.shape}")
+        print(f"First parameter mean: {first_param.mean().item():.6f}")
+        print(f"First parameter std: {first_param.std().item():.6f}")
+        print(f"First parameter hash: {hashlib.md5(first_param.cpu().detach().numpy().tobytes()).hexdigest()[:16]}")
+
+    # Check processor config
+    print(f"\nProcessor type: {type(mask_extractor.g_dino_processor)}")
+
+    print("="*80 + "\n")
     
     # Load pre-computed object features
     all_obj_files, all_obj_features = get_objects_features(args, my_objects)

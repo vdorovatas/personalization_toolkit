@@ -706,7 +706,9 @@ class YoLLavaDatasetVQA(Dataset):
         self.dataset_entries = []
         for obj_name, image_qa_dict in self.vqa.items():
             for img_path, qa_info in image_qa_dict.items():
+                img_path = os.path.join(os.path.dirname(args.json_path), img_path.lstrip('./'))
                 # Only add if image exists
+                print(img_path)
                 if os.path.exists(img_path):
                     self.dataset_entries.append({
                         'img_path': img_path,

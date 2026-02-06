@@ -211,11 +211,23 @@ class Extractor(torch.nn.Module):
         with torch.no_grad():
             outputs = self.g_dino_model(**inputs)
         width, height = image.size
+
+
+        print(f"\n>>> Raw outputs from G-DINO:")
+        print(f"    logits shape: {outputs.logits.shape}")
+        print(f"    boxes shape: {outputs.pred_boxes.shape}")
+        print(f"    Number of predictions: {outputs.pred_boxes.shape[1]}")
+
+
         postprocessed_outputs = self.g_dino_processor.image_processor.post_process_object_detection(outputs,
                                                                         target_sizes=[(height, width)],
                                                                         threshold=0.01)
         results = postprocessed_outputs[0]
         bboxes = results['boxes'].tolist()
+        print(f"\n>>> After post_process_object_detection:")
+        print(f"    Threshold used: 0.01")
+        print(f"    Boxes returned: {len(results['boxes'])}")
+        print(f"    Scores: {results['scores'][:10].tolist() if len(results['scores']) > 0 else 'none'}")
         masks = []
         for b in bboxes:
             mask = self.bbox_to_mask(width, height, b)
@@ -327,6 +339,7 @@ class Train_Extractor(torch.nn.Module):
             
         # 5. Use the PIL image's size for post-processing
         width, height = image_pil.size
+
         
         postprocessed_outputs = self.g_dino_processor.image_processor.post_process_object_detection(
             outputs,
@@ -334,7 +347,6 @@ class Train_Extractor(torch.nn.Module):
             threshold=0.01
         )
         results = postprocessed_outputs[0]
-
         scores = results['scores'].tolist()
         th = 0.3
         while not scores:

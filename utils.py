@@ -34,10 +34,11 @@ def setup_args():
     parser.add_argument('--dino_patch_size', type=int, default=14, help='Transformers Patch Size')
     parser.add_argument('--dino_embedding_size', type=int, default=1024, help='Transformers embedding Size')
     parser.add_argument('--shuffle', action='store_true', help='Shuffle the dataloader indices')
+    parser.add_argument('--multi_concept', action='store_true', help='Only for This-is-my: Set true to switch to multi-concept split.')
     parser.add_argument('--show', action='store_true', help='Show image and corresponding labels')
     parser.add_argument('--vlm_model', default="LLaVA", help='Which VLM model to use.')
     parser.add_argument('--training_views_path', default=None, help='Where to get training features for each personalized object.')
-    parser.add_argument('--n_training_views', default=4, help='Number of training views for each personalized object.')
+    parser.add_argument('--n_training_views', type=int,default=5, help='Number of training views for each personalized object.')
     parser.add_argument('--detect_thresh', default=0.75, help='Detection threshold for personalized objects.')
     parser.add_argument('--clip_vit_model', default="openai/clip-vit-large-patch14-336", help='Which CLIP model to load from HF.')
     parser.add_argument('--clip_img_size', type=int, default=1344, help='Clip image size for training view extraction.')
@@ -177,67 +178,135 @@ def filter_paths_by_strings(file_list, search_string_a, search_string_b):
     ]
     return matching_files
 
-def get_objects_features(args, my_objects): #HERE
-    #get the view for each object
-    #Run the segmentation network on the views and get the mean
-    #get the seg masks for the prsonalized objects
-    # TODO changes addreses
-    all_obj_files=[]
-    all_obj_features=[]
-    #change features path to args ??
-    features_path = os.path.join(args.features_folder,args.dataset, "extracted_features")
+def get_objects_features(args, my_objects):
+    """
+    Load object features from saved files.
+    
+    For 'normal' variation: Loads n_training_views base files
+    For 'augment' variation: Loads n_training_views base files + all their augmentations
+    
+    File naming convention:
+    - obj1_0.pt: base view (always loaded)
+    - obj1_1.pt, obj1_2.pt, ...: augmentations (only loaded if variation='augment')
+    """
+    all_obj_files = []
+    all_obj_features = []
+    
+    # Construct features path
+    features_path = os.path.join(args.features_folder, args.dataset, "extracted_features")
     if args.grounding_sam:
-        features_path = os.path.join(features_path,"gsam")
+        features_path = os.path.join(features_path, "gsam")
     if args.multi_concept:
-        features_path=os.path.join(args.features_folder,args.dataset.lower(),'multi_concept','extracted_features/gsam/')
+        features_path = os.path.join(args.features_folder, args.dataset.lower(), 
+                                     'multi_concept', 'extracted_features/gsam/')
     
-
-    #######temporary Vaggelis extractions
-    #if args.dataset=='myvlm':
-    #    features_path = "/fsx/ad/vlm/myvlm/vdoro_extracted_features/grounding_sam/1.2-augmented/"
-    #if args.dataset=='yollava':
-    #    features_path = "/fsx/ad/vlm/yollava/vdoro_extracted_features/grounding_sam_face/labelled-1.2-augmented/"
-    #if args.dataset=='this-is-my':
-    #    features_path="/fsx/ad/vlm/this-is-my/vdoro_extracted_features/grounding_sam/1.2-augmented/"
-    ##########################
-    
-    #For myVLM there is a need to get 4 views as training and gather all augmentations for those views
+    # Process each object
     for obj in my_objects:
-        if args.dataset=="myvlm":
-            obj = obj.replace(' ','_')
-        elif args.dataset=='yollava':
+        # Normalize object name
+        if args.dataset == "myvlm":
+            obj = obj.replace(' ', '_')
+        elif args.dataset == 'yollava':
             obj = substring_before_last_dash(obj)
+        
+        # Get all files for this object
+        all_files = glob.glob(features_path + "/{}/*.pt".format(obj), recursive=True)
         #import pdb;pdb.set_trace()
-        obj_files=glob.glob(features_path+"/{}/*.pt".format(obj),recursive=True)
-        random.shuffle(obj_files)
-        if args.n_training_views is not None:
-            obj_files = obj_files[:args.n_training_views]
+        if len(all_files) == 0:
+            print(f"Warning: No files found for {obj}")
+            all_obj_files.append([])
+            continue
+        
+        # Handle different variations
+        if args.variation == 'augment':
+            # Group files by base name (before augmentation index)
+            base_view_groups = {}
+            
+            for file_path in all_files:
+                filename = os.path.basename(file_path)
+                name_without_ext = os.path.splitext(filename)[0]
+                
+                # Try to split by last underscore to get augmentation index
+                parts = name_without_ext.rsplit('_', 1)
+                
+                if len(parts) == 2 and parts[1].isdigit():
+                    base_name = parts[0]
+                    aug_idx = int(parts[1])
+                    
+                    if base_name not in base_view_groups:
+                        base_view_groups[base_name] = []
+                    base_view_groups[base_name].append((aug_idx, file_path))
+                else:
+                    # File doesn't match pattern, treat as standalone
+                    if filename not in base_view_groups:
+                        base_view_groups[filename] = []
+                    base_view_groups[filename].append((0, file_path))
+            
+            # Sort each group by augmentation index
+            for base_name in base_view_groups:
+                base_view_groups[base_name].sort(key=lambda x: x[0])
+            
+            # Select base views
+            base_view_names = list(base_view_groups.keys())
+            random.shuffle(base_view_names)
+            
+            if args.n_training_views is not None:
+                selected_base_views = base_view_names[:args.n_training_views]
+            else:
+                selected_base_views = base_view_names
+            
+            # Collect all files for selected base views (base + augmentations)
+            obj_files = []
+            for base_name in selected_base_views:
+                for aug_idx, file_path in base_view_groups[base_name]:
+                    obj_files.append(file_path)
+            
+        else:
+            # For 'normal' variation, just take n_training_views files
+            random.shuffle(all_files)
+            if args.n_training_views is not None:
+                obj_files = all_files[:args.n_training_views]
+            else:
+                obj_files = all_files
+        
         all_obj_files.append(obj_files)
-    #import pdb;pdb.set_trace()
-    for o_num,o in enumerate(all_obj_files):
-        #print(o_num)
-        obj_features=[]
+    
+    # Load features from files
+    for o_num, o in enumerate(all_obj_files):
+        obj_features = []
+        
         for i in range(len(o)):
-            instance=torch.load(o[i],pickle_module=pickle)
-            if args.dataset=='myvlm':
-                instance_features=copy.deepcopy(instance['dino_obj_features'][0]).reshape([-1,1024])
-            elif args.dataset=='yollava' or args.dataset=='this-is-my':
-                #import pdb;pdb.set_trace()
+            instance = torch.load(o[i], pickle_module=pickle)
+            
+            # Extract features based on dataset
+            if args.dataset == 'myvlm':
+                instance_features = copy.deepcopy(instance['dino_obj_features'][0]).reshape([-1, 1024])
+            elif args.dataset == 'yollava' or args.dataset == 'this-is-my':
                 try:
-                    instance_features=torch.stack(instance['dino_obj_features']).squeeze().reshape([-1,1024])
+                    instance_features = torch.stack(instance['dino_obj_features']).squeeze().reshape([-1, 1024])
                 except:
-                    instance_features=copy.deepcopy(instance['dino_obj_features'])
+                    instance_features = copy.deepcopy(instance['dino_obj_features'])
+            
+            # Take mean across spatial dimensions
             obj_features.append(instance_features.mean(dim=0))
-        obj_features=torch.stack(obj_features)
-        #import pdb;pdb.set_trace()
+        
+        obj_features = torch.stack(obj_features)
         all_obj_features.append(obj_features)
     
-    if args.dataset=='myvlm':
-        all_obj_features_final=torch.stack(all_obj_features).cuda()
-    elif args.dataset=='yollava' or args.dataset=='this-is-my':
+    # Print summary
+    print("\n" + "="*80)
+    print(f"LOADED FEATURES (variation={args.variation}):")
+    print("="*80)
+    for x in range(len(all_obj_features)):
+        print(f"{my_objects[x]:40s} {len(all_obj_features[x]):3d} views")
+    print("="*80 + "\n")
+    
+    # Stack or pad features
+    if args.dataset == 'myvlm':
+        all_obj_features_final = torch.stack(all_obj_features).cuda()
+    elif args.dataset == 'yollava' or args.dataset == 'this-is-my':
         all_obj_features_final = pad_sequence(all_obj_features, batch_first=True).cuda()
     
-    return all_obj_files,all_obj_features_final
+    return all_obj_files, all_obj_features_final
 
 # Filter features using input mask
 def apply_mask_dino(args, sam_mask, dino_features):
